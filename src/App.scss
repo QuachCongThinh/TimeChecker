@@ -1,0 +1,23 @@
+@import "./assets/styles/variables";
+@import "./assets/styles/mixins";
+@import "./assets/styles/main";
+
+.app {
+  padding: 20px;
+  max-width: 1900px;
+  margin: auto;
+}
+
+.export-btn {
+  margin-top: 10px;
+  padding: 10px 15px;
+  background-color: $primary;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: 0.2s linear;
+  &:hover {
+    background-color: darken($primary, 10%);
+  }
+}

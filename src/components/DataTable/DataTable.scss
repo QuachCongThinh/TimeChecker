@@ -1,0 +1,26 @@
+$primary: #3498db;
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: left;
+  }
+
+  th {
+    background-color: $primary;
+    color: white;
+    text-align: center;
+  }
+
+  tr.changed {
+    background-color: #ffe6e6; // đỏ nhạt
+    border-left: 4px solid red;
+  }
+  .adjusted-row {
+    background-color: #fdf0b9; // vàng nhạt
+  }
+}
