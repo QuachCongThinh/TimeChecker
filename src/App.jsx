@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import "./App.scss";
 import ExcelUploader from "./components/ExcelUploader/ExcelUploader";
 import DataTable from "./components/DataTable/DataTable";
-import { detectDateColumns, detectAndAdjustByDoctor } from "./utils/timeUtils";
+import { detectDateColumns, adjustNoOverlapByDoctor } from "./utils/timeUtils";
 import { exportExcelFile } from "./utils/excelParser";
 import { formatDateVN } from "./utils/timeUtils";
 
@@ -25,8 +25,8 @@ export default function App() {
       "NGÀY VÀO VIỆN",
       "NGÀY RA VIỆN",
       "NGÀY Y LỆNH",
-      startCol, // NGÀY TH Y LỆNH
-      endCol, // NGÀY KẾT QUẢ
+      "NGÀY TH Y LỆNH",
+      "NGÀY KẾT QUẢ",
     ];
 
     // Convert & format tất cả các cột ngày
@@ -41,7 +41,7 @@ export default function App() {
       return newRow;
     });
 
-    const adjustedData = detectAndAdjustByDoctor(
+    const adjustedData = adjustNoOverlapByDoctor(
       data,
       startCol,
       endCol,
