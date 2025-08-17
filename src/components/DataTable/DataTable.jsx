@@ -1,4 +1,3 @@
-import React from "react";
 import "./DataTable.scss";
 
 export default function DataTable({ data }) {

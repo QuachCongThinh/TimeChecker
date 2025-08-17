@@ -15,7 +15,7 @@ export const detectDateColumns = (headers) => {
   return { startCol, endCol };
 };
 
-export const adjustNoOverlapByDoctor = (
+export const detectAndAdjustByDoctor = (
   records,
   startCol,
   endCol,
@@ -23,103 +23,98 @@ export const adjustNoOverlapByDoctor = (
 ) => {
   const updated = [];
 
-  // Gom ca theo bác sĩ
-  const grouped = records.reduce((acc, rec) => {
+  // Nhóm theo bác sĩ
+  const grouped = records.reduce((acc, rec, idx) => {
     const doctor = rec[doctorCol] || "Không rõ";
     if (!acc[doctor]) acc[doctor] = [];
     acc[doctor].push({
       ...rec,
       Trạng_thái: "Không chỉnh",
-      "Trùng với ca nào?": "",
+      "Trùng với bệnh nhân?": "",
+      _originalIndex: idx,
+      _linkedIndex: null,
     });
     return acc;
   }, {});
 
+  // Giờ nghỉ trưa
+  const isInLunchBreak = (date) => {
+    const h = date.getHours();
+    return h === 12; // từ 12:00:00 đến 12:59:59
+  };
+
+  // Xử lý từng nhóm bác sĩ
   Object.keys(grouped).forEach((doctor) => {
-    let group = grouped[doctor].sort(
+    const group = grouped[doctor].sort(
       (a, b) => new Date(a[startCol]) - new Date(b[startCol])
     );
 
-    /**
-     * 1️⃣ Xử lý tránh trùng giờ thực hiện
-     */
-    let hasOverlap = true;
-    while (hasOverlap) {
-      hasOverlap = false;
-      for (let i = 0; i < group.length - 1; i++) {
-        const currentEnd = new Date(group[i][endCol]);
-        const nextStart = new Date(group[i + 1][startCol]);
-        const nextEnd = new Date(group[i + 1][endCol]);
+    for (let i = 0; i < group.length - 1; i++) {
+      const currentEnd = new Date(group[i][endCol]);
+      let nextStart = new Date(group[i + 1][startCol]);
+      let nextEnd = new Date(group[i + 1][endCol]);
 
-        const overlap =
-          (nextStart >= new Date(group[i][startCol]) &&
-            nextStart <= currentEnd) ||
-          (nextEnd >= new Date(group[i][startCol]) && nextEnd <= currentEnd) ||
-          (nextStart <= new Date(group[i][startCol]) && nextEnd >= currentEnd);
+      let changed = false;
 
-        if (overlap) {
-          hasOverlap = true;
-          const adjustedStart = new Date(currentEnd.getTime() + 60 * 1000);
-          group[i + 1][startCol] = adjustedStart;
-
-          let adjustedEnd = new Date(nextEnd);
-          const diffMinutes = (adjustedEnd - adjustedStart) / (1000 * 60);
-          if (diffMinutes < 5) {
-            adjustedEnd = new Date(adjustedStart.getTime() + 5 * 60 * 1000);
-          }
-          group[i + 1][endCol] = adjustedEnd;
-
-          group[
-            i + 1
-          ].Trạng_thái = `Đã chỉnh (tránh trùng giờ thực hiện với bác sĩ ${doctor})`;
-          group[i + 1]["Trùng với ca nào?"] = group[i]["TÊN BỆNH NHÂN"];
-        }
+      // Nếu ca sau trùng hoặc bắt đầu trước ca trước kết thúc
+      if (nextStart <= currentEnd) {
+        nextStart = new Date(currentEnd.getTime() + 1 * 60 * 1000);
+        changed = true;
       }
-      group.sort((a, b) => new Date(a[startCol]) - new Date(b[startCol]));
-    }
 
-    /**
-     * 2️⃣ Kiểm tra tránh trùng Ngày kết quả
-     */
-    let hasResultOverlap = true;
-    while (hasResultOverlap) {
-      hasResultOverlap = false;
-      for (let i = 0; i < group.length - 1; i++) {
-        const resultA = new Date(group[i][endCol]);
-        const resultB = new Date(group[i + 1][endCol]);
-
-        if (resultA.getTime() === resultB.getTime()) {
-          hasResultOverlap = true;
-          const newStart = new Date(group[i + 1][startCol]);
-          const newEnd = new Date(group[i + 1][endCol]);
-          newStart.setMinutes(newStart.getMinutes() + 1);
-          newEnd.setMinutes(newEnd.getMinutes() + 1);
-
-          group[i + 1][startCol] = newStart;
-          group[i + 1][endCol] = newEnd;
-
-          group[
-            i + 1
-          ].Trạng_thái = `Đã chỉnh (tránh trùng Ngày kết quả với bác sĩ ${doctor})`;
-          group[i + 1]["Trùng với ca nào?"] = group[i]["TÊN BỆNH NHÂN"];
-        }
+      // Đảm bảo tối thiểu 5 phút
+      if ((nextEnd - nextStart) / (1000 * 60) < 5) {
+        nextEnd = new Date(nextStart.getTime() + 5 * 60 * 1000);
+        changed = true;
       }
-      group.sort((a, b) => new Date(a[startCol]) - new Date(b[startCol]));
-    }
 
-    /**
-     * 3️⃣ Format lại ngày cho tất cả ca
-     */
-    group = group.map((rec) => ({
-      ...rec,
-      [startCol]: formatDateVN(rec[startCol]),
-      [endCol]: formatDateVN(rec[endCol]),
-    }));
+      // Né giờ nghỉ trưa
+      if (isInLunchBreak(nextStart) || isInLunchBreak(nextEnd)) {
+        const afterLunch = new Date(nextStart);
+        afterLunch.setHours(13, 1, 0, 0); // 13:01
+        nextStart = afterLunch;
+        nextEnd = new Date(afterLunch.getTime() + 5 * 60 * 1000);
+        changed = true;
+      }
+
+      if (changed) {
+        group[i + 1][startCol] = formatDateVN(nextStart);
+        group[i + 1][endCol] = formatDateVN(nextEnd);
+
+        group[i + 1]["Trùng với bệnh nhân?"] = group[i]["TÊN BỆNH NHÂN"];
+        group[i]["Trùng với bệnh nhân?"] = group[i + 1]["TÊN BỆNH NHÂN"];
+
+        group[i]._linkedIndex = group[i + 1]._originalIndex;
+        group[i + 1]._linkedIndex = group[i]._originalIndex;
+        group[i + 1].Trạng_thái = `Đã chỉnh`;
+      }
+    }
 
     updated.push(...group);
   });
 
-  return updated;
+  // Gom cặp trùng đứng liền nhau
+  const visited = new Set();
+  const finalOrder = [];
+
+  updated.forEach((rec) => {
+    if (visited.has(rec._originalIndex)) return;
+
+    finalOrder.push(rec);
+    visited.add(rec._originalIndex);
+
+    if (rec._linkedIndex !== null) {
+      const linkedRec = updated.find(
+        (r) => r._originalIndex === rec._linkedIndex
+      );
+      if (linkedRec) {
+        finalOrder.push(linkedRec);
+        visited.add(linkedRec._originalIndex);
+      }
+    }
+  });
+
+  return finalOrder;
 };
 
 export const formatDateVN = (date) => {

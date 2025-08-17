@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import "./App.scss";
 import ExcelUploader from "./components/ExcelUploader/ExcelUploader";
 import DataTable from "./components/DataTable/DataTable";
-import { detectDateColumns, adjustNoOverlapByDoctor } from "./utils/timeUtils";
+import { detectDateColumns,  detectAndAdjustByDoctor} from "./utils/timeUtils";
 import { exportExcelFile } from "./utils/excelParser";
 import { formatDateVN } from "./utils/timeUtils";
 
@@ -41,7 +41,7 @@ export default function App() {
       return newRow;
     });
 
-    const adjustedData = adjustNoOverlapByDoctor(
+    const adjustedData = detectAndAdjustByDoctor(
       data,
       startCol,
       endCol,
