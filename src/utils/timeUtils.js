@@ -32,7 +32,6 @@ export const detectAndAdjustByDoctor = (
       Trạng_thái: "Không chỉnh",
       "Trùng với bệnh nhân?": "",
       _originalIndex: idx,
-      _linkedIndex: null,
     });
     return acc;
   }, {});
@@ -82,10 +81,6 @@ export const detectAndAdjustByDoctor = (
         group[i + 1][endCol] = formatDateVN(nextEnd);
 
         group[i + 1]["Trùng với bệnh nhân?"] = group[i]["TÊN BỆNH NHÂN"];
-        group[i]["Trùng với bệnh nhân?"] = group[i + 1]["TÊN BỆNH NHÂN"];
-
-        group[i]._linkedIndex = group[i + 1]._originalIndex;
-        group[i + 1]._linkedIndex = group[i]._originalIndex;
         group[i + 1].Trạng_thái = `Đã chỉnh`;
       }
     }
@@ -93,28 +88,10 @@ export const detectAndAdjustByDoctor = (
     updated.push(...group);
   });
 
-  // Gom cặp trùng đứng liền nhau
-  const visited = new Set();
-  const finalOrder = [];
-
-  updated.forEach((rec) => {
-    if (visited.has(rec._originalIndex)) return;
-
-    finalOrder.push(rec);
-    visited.add(rec._originalIndex);
-
-    if (rec._linkedIndex !== null) {
-      const linkedRec = updated.find(
-        (r) => r._originalIndex === rec._linkedIndex
-      );
-      if (linkedRec) {
-        finalOrder.push(linkedRec);
-        visited.add(linkedRec._originalIndex);
-      }
-    }
-  });
-
-  return finalOrder;
+  // Sort lại toàn bộ dữ liệu theo thời gian thực hiện y lệnh
+  return updated.sort(
+    (a, b) => new Date(a[startCol]) - new Date(b[startCol])
+  );
 };
 
 export const formatDateVN = (date) => {
