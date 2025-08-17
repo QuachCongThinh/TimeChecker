@@ -36,62 +36,57 @@ export const detectAndAdjustByDoctor = (
     return acc;
   }, {});
 
-  // Giờ nghỉ trưa
-  const isInLunchBreak = (date) => {
-    const h = date.getHours();
-    return h === 12; // từ 12:00:00 đến 12:59:59
-  };
+  const isInLunchBreak = (date) => date.getHours() === 12;
 
-  // Xử lý từng nhóm bác sĩ
   Object.keys(grouped).forEach((doctor) => {
     const group = grouped[doctor].sort(
       (a, b) => new Date(a[startCol]) - new Date(b[startCol])
     );
 
-    for (let i = 0; i < group.length - 1; i++) {
-      const currentEnd = new Date(group[i][endCol]);
-      let nextStart = new Date(group[i + 1][startCol]);
-      let nextEnd = new Date(group[i + 1][endCol]);
+    let latestEnd = null;
 
+    for (let i = 0; i < group.length; i++) {
+      let curStart = new Date(group[i][startCol]);
+      let curEnd = new Date(group[i][endCol]);
       let changed = false;
 
-      // Nếu ca sau trùng hoặc bắt đầu trước ca trước kết thúc
-      if (nextStart <= currentEnd) {
-        nextStart = new Date(currentEnd.getTime() + 1 * 60 * 1000);
+      // Nếu start < latestEnd => dịch ra sau
+      if (latestEnd && curStart <= latestEnd) {
+        curStart = new Date(latestEnd.getTime() + 1 * 60 * 1000);
         changed = true;
       }
 
-      // Đảm bảo tối thiểu 5 phút
-      if ((nextEnd - nextStart) / (1000 * 60) < 5) {
-        nextEnd = new Date(nextStart.getTime() + 5 * 60 * 1000);
+      // Đảm bảo ca >= 5 phút
+      if ((curEnd - curStart) / (1000 * 60) < 5) {
+        curEnd = new Date(curStart.getTime() + 5 * 60 * 1000);
         changed = true;
       }
 
       // Né giờ nghỉ trưa
-      if (isInLunchBreak(nextStart) || isInLunchBreak(nextEnd)) {
-        const afterLunch = new Date(nextStart);
+      if (isInLunchBreak(curStart) || isInLunchBreak(curEnd)) {
+        const afterLunch = new Date(curStart);
         afterLunch.setHours(13, 1, 0, 0); // 13:01
-        nextStart = afterLunch;
-        nextEnd = new Date(afterLunch.getTime() + 5 * 60 * 1000);
+        curStart = afterLunch;
+        curEnd = new Date(afterLunch.getTime() + 5 * 60 * 1000);
         changed = true;
       }
 
+      // Cập nhật nếu có chỉnh
       if (changed) {
-        group[i + 1][startCol] = formatDateVN(nextStart);
-        group[i + 1][endCol] = formatDateVN(nextEnd);
-
-        group[i + 1]["Trùng với bệnh nhân?"] = group[i]["TÊN BỆNH NHÂN"];
-        group[i + 1].Trạng_thái = `Đã chỉnh`;
+        group[i][startCol] = formatDateVN(curStart);
+        group[i][endCol] = formatDateVN(curEnd);
+        group[i].Trạng_thái = "Đã chỉnh";
       }
+
+      // Ghi nhận latestEnd
+      latestEnd = curEnd;
     }
 
     updated.push(...group);
   });
 
-  // Sort lại toàn bộ dữ liệu theo thời gian thực hiện y lệnh
-  return updated.sort(
-    (a, b) => new Date(a[startCol]) - new Date(b[startCol])
-  );
+  // Sort toàn bộ theo thời gian
+  return updated.sort((a, b) => new Date(a[startCol]) - new Date(b[startCol]));
 };
 
 export const formatDateVN = (date) => {
