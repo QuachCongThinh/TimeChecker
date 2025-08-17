@@ -2,9 +2,12 @@ import React, { useState } from "react";
 import "./App.scss";
 import ExcelUploader from "./components/ExcelUploader/ExcelUploader";
 import DataTable from "./components/DataTable/DataTable";
-import { detectDateColumns,  detectAndAdjustByDoctor} from "./utils/timeUtils";
+import {
+  detectDateColumns,
+  detectAndAdjustByDoctor,
+  normalizeDate,
+} from "./utils/timeUtils";
 import { exportExcelFile } from "./utils/excelParser";
-import { formatDateVN } from "./utils/timeUtils";
 
 export default function App() {
   const [data, setData] = useState([]);
@@ -34,8 +37,7 @@ export default function App() {
       const newRow = { ...row };
       dateCols.forEach((col) => {
         if (newRow[col]) {
-          const dateVal = excelDateToJS(newRow[col]);
-          newRow[col] = dateVal ? formatDateVN(dateVal) : "";
+          newRow[col] = normalizeDate(newRow[col]); // chỉ gọi 1 hàm duy nhất
         }
       });
       return newRow;
@@ -49,31 +51,6 @@ export default function App() {
     );
 
     setData(adjustedData);
-  };
-
-  const excelDateToJS = (value) => {
-    if (!value) return "";
-    if (typeof value === "number") {
-      // Tách ngày & giờ
-      const utcDays = Math.floor(value - 25569);
-      const utcValue = utcDays * 86400;
-      const dateInfo = new Date(utcValue * 1000);
-
-      // Phần giờ trong ngày
-      const fractionalDay = value - Math.floor(value) + 0.0000001;
-      let totalSeconds = Math.floor(86400 * fractionalDay);
-      const seconds = totalSeconds % 60;
-      totalSeconds -= seconds;
-      const hours = Math.floor(totalSeconds / (60 * 60));
-      const minutes = Math.floor(totalSeconds / 60) % 60;
-
-      dateInfo.setHours(hours);
-      dateInfo.setMinutes(minutes);
-      dateInfo.setSeconds(seconds);
-      return dateInfo;
-    }
-    // Nếu là string
-    return new Date(value);
   };
 
   return (
