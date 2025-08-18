@@ -1,15 +1,23 @@
 import "./DataTable.scss";
+import { useEffect, useState } from "react";
 
 export default function DataTable({ data }) {
+  const [animate, setAnimate] = useState(false);
+
+  useEffect(() => {
+    if (data.length) {
+      setTimeout(() => setAnimate(true), 50);
+    }
+  }, [data]);
+
   if (!data.length) return null;
 
-  // Lấy danh sách cột, bỏ cột private
   const columns = Object.keys(data[0]).filter(
     (col) => col !== "_originalIndex" && col !== "_linkedIndex"
   );
 
   return (
-    <div className="table-wrapper">
+    <div className={`table-wrapper ${animate ? "slide-up" : ""}`}>
       <table className="data-table">
         <thead>
           <tr>
@@ -23,10 +31,9 @@ export default function DataTable({ data }) {
             let rowClass = "";
             let cellStyle = {};
 
-            if (row.Trạng_thái.includes("Đã chỉnh")) {
-              rowClass = "adjusted-row"; // vàng nhạt cho ca đã chỉnh
+            if (row.Trạng_thái?.includes("Đã chỉnh")) {
+              rowClass = "adjusted-row";
             } else if (row["Trùng với ca nào?"]) {
-              // Chỉ đổi màu đỏ nếu có ca trùng
               cellStyle = { color: "red", fontWeight: "bold" };
             }
 

@@ -1,8 +1,14 @@
 $primary: #3498db;
+.table-wrapper {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.4s ease-in-out;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
-
+  
   th,
   td {
     border: 1px solid #ccc;
@@ -13,7 +19,6 @@ $primary: #3498db;
   th {
     background-color: $primary;
     color: white;
-    text-align: center;
   }
 
   tr.changed {
@@ -23,4 +28,9 @@ $primary: #3498db;
   .adjusted-row {
     background-color: #fdf0b9; // vàng nhạt
   }
+}
+
+.table-wrapper.slide-up {
+  opacity: 1;
+  transform: translateY(0);
 }

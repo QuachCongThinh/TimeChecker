@@ -32,12 +32,11 @@ export default function App() {
       "NGÀY KẾT QUẢ",
     ];
 
-    // Convert & format tất cả các cột ngày
     const data = parsed.map((row) => {
       const newRow = { ...row };
       dateCols.forEach((col) => {
         if (newRow[col]) {
-          newRow[col] = normalizeDate(newRow[col]); // chỉ gọi 1 hàm duy nhất
+          newRow[col] = normalizeDate(newRow[col]); 
         }
       });
       return newRow;

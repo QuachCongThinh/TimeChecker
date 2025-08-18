@@ -1,23 +1,113 @@
-@import "./assets/styles/variables";
-@import "./assets/styles/mixins";
-@import "./assets/styles/main";
+$primary: #1976d2;
+$bg-color: #f4f6f8;
+$text-color: #333;
+$card-bg: #fff;
+$shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 
-.app {
-  padding: 20px;
-  max-width: 1900px;
-  text-align: center;
+body {
+  font-family: "Segoe UI", Roboto, sans-serif;
+  background-color: $bg-color;
+  color: $text-color;
+  margin: 0;
+  font-size: 16px;
+  cursor: pointer;
 }
 
-.export-btn {
-  margin-top: 10px;
-  padding: 10px 15px;
-  background-color: $primary;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: 0.2s linear;
-  &:hover {
-    background-color: darken($primary, 10%);
+.app {
+  max-width: 1900px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: $primary;
+  }
+
+  .upload-section {
+    background: $card-bg;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: $shadow;
+    margin-bottom: 2rem;
+  }
+  .export-btn {
+    position: relative;
+    overflow: hidden;
+    background: $primary;
+    color: #fff;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 1.5rem;
+
+    &:hover {
+      background: darken($primary, 10%);
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+      transform: translateY(-2px);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      transform: scale(0);
+      animation: ripple 600ms linear;
+      background-color: rgba(255, 255, 255, 0.7);
+      pointer-events: none;
+    }
+  }
+
+  @keyframes ripple {
+    to {
+      transform: scale(4);
+      opacity: 0;
+    }
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1.5rem;
+    background: $card-bg;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: $shadow;
+
+    thead {
+      background: $primary;
+      color: #fff;
+
+      th {
+        padding: 1rem;
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+    }
+
+    tbody {
+      tr {
+        &:nth-child(even) {
+          background: #f9fbfd;
+        }
+        &:hover {
+          background: lighten($primary, 45%);
+        }
+      }
+      td {
+        padding: 0.9rem 1rem;
+        border-bottom: 1px solid #eee;
+        font-size: 0.9rem;
+      }
+    }
   }
 }
