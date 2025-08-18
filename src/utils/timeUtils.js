@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 export const detectDateColumns = (headers) => {
   let startCol = null;
   let endCol = null;
@@ -37,10 +38,6 @@ const isAfterWork = (d) =>
 const isBeforeWork = (d) =>
   d.getHours() < WORK_START_H ||
   (d.getHours() === WORK_START_H && d.getMinutes() < 0);
-// const sameDay = (a, b) =>
-//   a.getFullYear() === b.getFullYear() &&
-//   a.getMonth() === b.getMonth() &&
-//   a.getDate() === b.getDate();
 
 const dayMorningStart = (d) => setHM(d, WORK_START_H, 0); // 08:00
 const dayMorningEnd = (d) => setHM(d, LUNCH_START_H, 0); // 12:00 (exclusive)
@@ -128,53 +125,16 @@ const nextFeasibleStart = (candidateStart, preference, winStart, winEnd) => {
   }
 };
 
-// Cho trước start, duration → trả về {start,end} hợp lệ (né trưa, hạn chế >17:00), trong cửa sổ
 const placeWithDuration = (start, durationMin, winStart, winEnd) => {
   let s = dClone(start);
   let e = new Date(s.getTime() + durationMin * MS);
 
-  // Né nghỉ trưa
-  if (s.getHours() === LUNCH_START_H || e.getHours() === LUNCH_START_H) {
-    s = dayAfternoonStart(s);
-    e = new Date(s.getTime() + durationMin * MS);
-  }
+  if (e > winEnd) return null;
 
-  // Hạn chế > 17:00: nếu e > 17:00, thử dời sang khung sáng/chiều tiếp theo trong cửa sổ
-  if (isAfterWork(e)) {
-    // Ưu tiên chuyển sang 13:01 cùng ngày nếu còn kịp
-    const aftStart = dayAfternoonStart(s);
-    const aftEnd = dayAfternoonEnd(s);
-    if (
-      s < aftStart &&
-      aftStart.getTime() + durationMin * MS <= aftEnd.getTime()
-    ) {
-      s = aftStart;
-      e = new Date(s.getTime() + durationMin * MS);
-    }
-    // Nếu vẫn > 17:00 → chuyển sáng hôm sau
-    if (isAfterWork(e)) {
-      const nextMorning = dayMorningStart(
-        new Date(s.getFullYear(), s.getMonth(), s.getDate() + 1)
-      );
-      if (nextMorning <= winEnd) {
-        s = nextMorning;
-        e = new Date(s.getTime() + durationMin * MS);
-      }
-    }
-    // Nếu vẫn vượt cửa sổ, chấp nhận giữ (chỉ khi e <= winEnd), còn nếu vượt winEnd thì trả null
-  }
+  let exceeded = false;
+  if (isAfterWork(e)) exceeded = true;
 
-  // Kiểm tra phạm vi cửa sổ
-  if (s < winStart) {
-    s = dClone(winStart);
-    e = new Date(s.getTime() + durationMin * MS);
-  }
-
-  if (e > winEnd) {
-    // Không thể đặt trong cửa sổ
-    return null;
-  }
-  return { start: s, end: e };
+  return { start: s, end: e, exceeded };
 };
 
 export const detectAndAdjustByDoctor = (
@@ -185,294 +145,98 @@ export const detectAndAdjustByDoctor = (
 ) => {
   const updated = [];
 
-  // Nhóm theo bác sĩ
   const grouped = records.reduce((acc, rec, idx) => {
     const doctor = rec[doctorCol] || "Không rõ";
     if (!acc[doctor]) acc[doctor] = [];
     acc[doctor].push({
       ...rec,
       Trạng_thái: rec.Trạng_thái || "Không chỉnh",
+      Trùng_với: "",
       _originalIndex: idx,
     });
     return acc;
   }, {});
 
   Object.keys(grouped).forEach((doctor) => {
-    const group = grouped[doctor].sort(
+    let group = grouped[doctor].sort(
       (a, b) => parseDate(a[startCol]) - parseDate(b[startCol])
     );
 
-    let latestEnd = null; // ràng buộc theo timeline bác sĩ
+    let adjusted = true;
+    while (adjusted) {
+      adjusted = false;
 
-    for (let i = 0; i < group.length; i++) {
-      const row = group[i];
+      for (let i = 0; i < group.length - 1; i++) {
+        const caA = group[i];
+        const caB = group[i + 1];
 
-      // Ca chỉnh tay → giữ nguyên (nhưng vẫn validate phạm vi, nếu lệch thì cố đặt lại gần nhất)
-      const manualLocked = row.Trạng_thái === "Đã chỉnh (thủ công)";
+        let endA = parseDate(caA[endCol]);
+        let startB = parseDate(caB[startCol]);
+        let endB = parseDate(caB[endCol]);
+        const manualLocked = caB.Trạng_thái === "Đã chỉnh (thủ công)";
 
-      let originalStart = parseDate(row[startCol]);
-      let originalEnd = parseDate(row[endCol]);
+        // Nếu trùng ca
+        if (startB < endA) {
+          if (!manualLocked) {
+            // Khoảng thời gian ca B
+            const duration = Math.max(5, Math.round((endB - startB) / MS));
 
-      // Duration tối thiểu 5’
-      let durationMin = Math.max(
-        5,
-        Math.round((originalEnd - originalStart) / MS)
-      );
+            // Bắt đầu sau ca A
+            let newStart = new Date(endA.getTime() + 1 * MS);
+            let newEnd = new Date(newStart.getTime() + duration * MS);
 
-      const { admit, discharge, winStart, winEnd } = getPatientWindow(row);
-      const preference = inferHalfDayPreference(admit, discharge);
+            // Tự động điều chỉnh vào khung giờ sáng/chiều
+            if (isDuringLunch(newStart)) newStart = dayAfternoonStart(newStart);
+            if (isAfterWork(newStart)) {
+              // Nếu vượt giờ, chuyển sang ngày hôm sau
+              newStart.setDate(newStart.getDate() + 1);
+              newStart = dayMorningStart(newStart);
+            }
 
-      let targetStart = originalStart;
+            newEnd = new Date(newStart.getTime() + duration * MS);
 
-      // Nếu trùng với ca trước của bác sĩ, dời sang ngay sau
-      if (latestEnd && targetStart <= latestEnd) {
-        targetStart = new Date(latestEnd.getTime() + 1 * MS);
-      }
+            // Nếu end trùng giờ lunch, đẩy sang chiều
+            if (
+              newEnd > dayMorningEnd(newEnd) &&
+              newEnd <= dayAfternoonStart(newEnd)
+            ) {
+              newEnd = dayAfternoonStart(newEnd);
+            }
 
-      // Áp cửa sổ bệnh nhân + ưu tiên buổi
-      let feasibleStart = nextFeasibleStart(
-        targetStart,
-        preference,
-        winStart,
-        winEnd
-      );
-      if (!feasibleStart) {
-        // Không còn slot trong cửa sổ → thử “giữ nguyên” nếu giờ gốc đã nằm trong cửa sổ
-        const inWin = originalStart >= winStart && originalEnd <= winEnd;
-        if (inWin && (!latestEnd || originalStart > latestEnd)) {
-          feasibleStart = originalStart; // chấp nhận giờ gốc
-        } else {
-          // Bất khả thi
-          row.Trạng_thái = manualLocked
-            ? "Đã chỉnh (thủ công) – ngoài cửa sổ"
-            : "Không thể xếp trong cửa sổ";
-          updated.push(row);
-          latestEnd = originalEnd;
-          continue;
+            // Nếu vượt giờ làm việc, cắt lại
+            if (isAfterWork(newEnd)) newEnd = dayAfternoonEnd(newEnd);
+
+            caB[startCol] = normalizeDate(newStart);
+            caB[endCol] = normalizeDate(newEnd);
+            caB.Trạng_thái = "Đã chỉnh (tự động) – tránh trùng & giờ làm việc";
+            caB.Trùng_với = `BN: ${caA["TÊN BỆNH NHÂN"] || "?"} (${
+              caA[startCol]
+            } - ${caA[endCol]})`;
+
+            adjusted = true;
+          } else {
+            caB.Trạng_thái = "Đã chỉnh (thủ công) – nhưng trùng ca";
+            caB.Trùng_với = `BN: ${caA["TÊN BỆNH NHÂN"] || "?"} (${
+              caA[startCol]
+            } - ${caA[endCol]})`;
+          }
         }
       }
 
-      // Đặt theo duration và ràng buộc 17:00, trưa
-      const placed = placeWithDuration(
-        feasibleStart,
-        durationMin,
-        winStart,
-        winEnd
-      );
-
-      if (!placed) {
-        // Không thể đặt khớp duration trong cửa sổ
-        row.Trạng_thái = manualLocked
-          ? "Đã chỉnh (thủ công) – ngoài cửa sổ"
-          : "Không thể xếp trong cửa sổ";
-        updated.push(row);
-        latestEnd = originalEnd;
-        continue;
-      }
-
-      const { start: finalStart, end: finalEnd } = placed;
-
-      // Nếu manualLocked và giờ gốc đã hợp lệ & không trùng → giữ nguyên
-      if (manualLocked) {
-        const manualOk =
-          originalStart >= winStart &&
-          originalEnd <= winEnd &&
-          (!latestEnd || originalStart > latestEnd) &&
-          !isDuringLunch(originalStart) &&
-          !isDuringLunch(originalEnd) &&
-          !isAfterWork(originalEnd);
-
-        if (manualOk) {
-          // giữ nguyên manual
-          latestEnd = originalEnd;
-          updated.push(row);
-          continue;
-        }
-      }
-
-      // Gán kết quả
-      row[startCol] = normalizeDate(finalStart);
-      row[endCol] = normalizeDate(finalEnd);
-
-      // Gắn trạng thái
-      if (manualLocked) {
-        // người dùng có chỉnh tay nhưng ta buộc phải dời để hợp lệ
-        row.Trạng_thái = "Đã chỉnh (thủ công) + hiệu chỉnh hợp lệ";
-      } else {
-        // Nếu thay đổi so với gốc thì đánh dấu tự động
-        const changed =
-          originalStart.getTime() !== finalStart.getTime() ||
-          originalEnd.getTime() !== finalEnd.getTime();
-        row.Trạng_thái = changed
-          ? "Đã chỉnh (tự động)"
-          : row.Trạng_thái || "Không chỉnh";
-      }
-
-      latestEnd = finalEnd;
-      updated.push(row);
+      group.sort((a, b) => parseDate(a[startCol]) - parseDate(b[startCol]));
     }
 
-    // Validate một lượt cuối cho nhóm bác sĩ (né trùng còn sót)
-    for (let i = 1; i < group.length; i++) {
-      const prev = group[i - 1];
-      const cur = group[i];
-      let prevEnd = parseDate(prev[endCol]);
-      let curStart = parseDate(cur[startCol]);
-      let curEnd = parseDate(cur[endCol]);
-
-      if (curStart <= prevEnd) {
-        const durationMin = Math.max(5, Math.round((curEnd - curStart) / MS));
-        const { winStart, winEnd, admit, discharge } = getPatientWindow(cur);
-        const preference = inferHalfDayPreference(admit, discharge);
-
-        let s = new Date(prevEnd.getTime() + 1 * MS);
-        s = nextFeasibleStart(s, preference, winStart, winEnd) || s;
-        const placed = placeWithDuration(s, durationMin, winStart, winEnd);
-
-        if (placed) {
-          cur[startCol] = normalizeDate(placed.start);
-          cur[endCol] = normalizeDate(placed.end);
-          cur.Trạng_thái =
-            cur.Trạng_thái === "Đã chỉnh (thủ công)"
-              ? "Đã chỉnh (thủ công) + hiệu chỉnh hợp lệ"
-              : "Đã chỉnh (tự động)";
-          // cập nhật lại prevEnd cho vòng tiếp
-          prevEnd = placed.end;
-        } else {
-          // nếu vẫn không thể, giữ nguyên nhưng đánh dấu
-          cur.Trạng_thái =
-            cur.Trạng_thái === "Đã chỉnh (thủ công)"
-              ? "Đã chỉnh (thủ công) – ngoài cửa sổ"
-              : "Không thể xếp trong cửa sổ";
-        }
-      }
-    }
+    updated.push(...group);
   });
 
-  // Sắp theo tên BN rồi theo thời gian
   return updated.sort((a, b) => {
-    const nameA = (a["TÊN BỆNH NHÂN"] || "").toLowerCase();
-    const nameB = (b["TÊN BỆNH NHÂN"] || "").toLowerCase();
-    if (nameA < nameB) return -1;
-    if (nameA > nameB) return 1;
+    const doctorA = (a[doctorCol] || "").toLowerCase();
+    const doctorB = (b[doctorCol] || "").toLowerCase();
+    if (doctorA < doctorB) return -1;
+    if (doctorA > doctorB) return 1;
     return parseDate(a[startCol]) - parseDate(b[startCol]);
   });
 };
-
-// export const detectAndAdjustByDoctor = (
-//   records,
-//   startCol,
-//   endCol,
-//   doctorCol
-// ) => {
-//   const updated = [];
-
-//   // Nhóm theo bác sĩ
-//   const grouped = records.reduce((acc, rec, idx) => {
-//     const doctor = rec[doctorCol] || "Không rõ";
-//     if (!acc[doctor]) acc[doctor] = [];
-//     acc[doctor].push({
-//       ...rec,
-//       Trạng_thái: rec.Trạng_thái || "Không chỉnh",
-//       "Trùng với bệnh nhân?": rec["Trùng với bệnh nhân?"] || "",
-//       _originalIndex: idx,
-//     });
-//     return acc;
-//   }, {});
-
-//   const isInLunchBreak = (date) =>
-//     date.getHours() === 12 || (date.getHours() === 13 && date.getMinutes() < 1);
-
-//   Object.keys(grouped).forEach((doctor) => {
-//     const group = grouped[doctor].sort(
-//       (a, b) => parseDate(a[startCol]) - parseDate(b[startCol])
-//     );
-
-//     let latestEnd = null;
-
-//     for (let i = 0; i < group.length; i++) {
-//       let curStart = parseDate(group[i][startCol]);
-//       let curEnd = parseDate(group[i][endCol]);
-//       let changed = false;
-
-//       // Nếu đã chỉnh thủ công thì giữ nguyên
-//       if (group[i].Trạng_thái === "Đã chỉnh (thủ công)") {
-//         latestEnd = curEnd;
-//         updated.push(group[i]);
-//         continue;
-//       }
-
-//       // Tính duration gốc (>= 5 phút)
-//       let duration = (curEnd - curStart) / (1000 * 60);
-//       if (isNaN(duration) || duration < 5) duration = 5;
-
-//       // Nếu bắt đầu < latestEnd thì dời sang sát ngay latestEnd
-//       if (latestEnd && curStart <= latestEnd) {
-//         curStart = new Date(latestEnd.getTime() + 1 * 60 * 1000);
-//         changed = true;
-//       }
-
-//       // Tính lại giờ kết thúc
-//       curEnd = new Date(curStart.getTime() + duration * 60 * 1000);
-
-//       // Né giờ nghỉ trưa
-//       if (isInLunchBreak(curStart) || isInLunchBreak(curEnd)) {
-//         const afterLunch = new Date(curStart);
-//         afterLunch.setHours(13, 1, 0, 0); // 13:01
-//         curStart = afterLunch;
-//         curEnd = new Date(curStart.getTime() + duration * 60 * 1000);
-//         changed = true;
-//       }
-
-//       // Ghi kết quả
-//       group[i][startCol] = normalizeDate(curStart);
-//       group[i][endCol] = normalizeDate(curEnd);
-//       group[i].Trạng_thái = changed
-//         ? "Đã chỉnh (tự động)"
-//         : group[i].Trạng_thái || "Không chỉnh";
-
-//       latestEnd = curEnd;
-//       updated.push(group[i]);
-//     }
-
-//     // ✅ VALIDATE lần cuối: quét lại toàn bộ ca của bác sĩ
-//     for (let i = 1; i < group.length; i++) {
-//       let prevEnd = parseDate(group[i - 1][endCol]);
-//       let curStart = parseDate(group[i][startCol]);
-//       let curEnd = parseDate(group[i][endCol]);
-
-//       let duration = (curEnd - curStart) / (1000 * 60);
-//       if (isNaN(duration) || duration < 5) duration = 5;
-
-//       if (curStart <= prevEnd) {
-//         // Dời ca trùng sang sau ca trước
-//         curStart = new Date(prevEnd.getTime() + 1 * 60 * 1000);
-//         curEnd = new Date(curStart.getTime() + duration * 60 * 1000);
-
-//         // Né giờ nghỉ trưa
-//         if (isInLunchBreak(curStart) || isInLunchBreak(curEnd)) {
-//           const afterLunch = new Date(curStart);
-//           afterLunch.setHours(13, 1, 0, 0);
-//           curStart = afterLunch;
-//           curEnd = new Date(curStart.getTime() + duration * 60 * 1000);
-//         }
-
-//         group[i][startCol] = normalizeDate(curStart);
-//         group[i][endCol] = normalizeDate(curEnd);
-//         group[i].Trạng_thái = "Đã chỉnh (tự động)";
-//       }
-//     }
-//   });
-
-//   // Sắp xếp toàn bộ: theo tên bệnh nhân, sau đó theo thời gian
-//   return updated.sort((a, b) => {
-//     const nameA = (a["TÊN BỆNH NHÂN"] || "").toLowerCase();
-//     const nameB = (b["TÊN BỆNH NHÂN"] || "").toLowerCase();
-//     if (nameA < nameB) return -1;
-//     if (nameA > nameB) return 1;
-//     return parseDate(a[startCol]) - parseDate(b[startCol]);
-//   });
-// };
 
 // utils/timeUtils.js
 export const parseDate = (value) => {

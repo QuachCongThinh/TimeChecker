@@ -8,7 +8,7 @@ $primary: #3498db;
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  
+
   th,
   td {
     border: 1px solid #ccc;
@@ -20,13 +20,11 @@ $primary: #3498db;
     background-color: $primary;
     color: white;
   }
-
-  tr.changed {
-    background-color: #ffe6e6; // đỏ nhạt
-    border-left: 4px solid red;
+  tr.selected-row {
+    background-color: #fff9c4 !important; // vàng nhạt
   }
-  .adjusted-row {
-    background-color: #fdf0b9; // vàng nhạt
+  tr.checked-row {
+    background-color: #c2ffc4 !important; // xanh nhạt
   }
 }
 
