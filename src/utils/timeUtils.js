@@ -188,9 +188,9 @@ export const detectAndAdjustByDoctor = (
             // Tự động điều chỉnh vào khung giờ sáng/chiều
             if (isDuringLunch(newStart)) newStart = dayAfternoonStart(newStart);
             if (isAfterWork(newStart)) {
-              // Nếu vượt giờ, chuyển sang ngày hôm sau
-              newStart.setDate(newStart.getDate() + 1);
-              newStart = dayMorningStart(newStart);
+              // Nếu vượt giờ, không dời sang ngày hôm sau
+              newStart = dayAfternoonEnd(newStart); // đặt ngay cuối giờ chiều
+              // hoặc để null nếu không thể đặt
             }
 
             newEnd = new Date(newStart.getTime() + duration * MS);

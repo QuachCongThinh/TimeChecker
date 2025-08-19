@@ -23,17 +23,22 @@ export default function DataTable({ data, onDataChange }) {
   };
 
   const handleCheckboxChange = (idx) => {
-    // chỉ đổi trạng thái nếu trạng thái hiện tại là "Đã chỉnh (tự động) – tránh trùng"
-    if (data[idx].Trạng_thái === "Đã chỉnh (tự động) – tránh trùng") {
-      setCheckedRows((prev) => {
-        const newState = { ...prev, [idx]: true }; // tick checkbox
-        const updatedData = [...data];
-        updatedData[idx].Trạng_thái = "Không chỉnh";
+    setCheckedRows((prev) => {
+      const isChecked = !prev[idx]; // toggle trạng thái
+      const newState = { ...prev, [idx]: isChecked };
 
-        if (onDataChange) onDataChange(updatedData);
-        return newState;
-      });
-    }
+      const updatedData = [...data];
+      if (isChecked) {
+        // tick → đổi trạng thái
+        updatedData[idx].Trạng_thái = "Không chỉnh";
+      } else {
+        // uncheck → có thể reset trạng thái về ban đầu
+        updatedData[idx].Trạng_thái = "Đã chỉnh (tự động) – tránh trùng";
+      }
+
+      if (onDataChange) onDataChange(updatedData);
+      return newState;
+    });
   };
 
   return (
@@ -63,9 +68,8 @@ export default function DataTable({ data, onDataChange }) {
                 <td>
                   <input
                     type="checkbox"
-                    checked={!!isChecked}
+                    checked={!!checkedRows[idx]}
                     onChange={() => handleCheckboxChange(idx)}
-                    disabled={row.Trạng_thái === "Không chỉnh"} // disable nếu đã là "Không chỉnh"
                     onClick={(e) => e.stopPropagation()}
                   />
                 </td>
