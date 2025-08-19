@@ -175,35 +175,25 @@ export const detectAndAdjustByDoctor = (
         let endB = parseDate(caB[endCol]);
         const manualLocked = caB.Trạng_thái === "Đã chỉnh (thủ công)";
 
-        // Nếu trùng ca
-        if (startB < endA) {
-          if (!manualLocked) {
-            // Khoảng thời gian ca B
-            const duration = Math.max(5, Math.round((endB - startB) / MS));
+        const bufferMS = 1 * 60 * 1000; // 1 phút
 
-            // Bắt đầu sau ca A
-            let newStart = new Date(endA.getTime() + 1 * MS);
+        if (startB < new Date(endA.getTime() + bufferMS)) {
+          if (!manualLocked) {
+            const duration = Math.max(5, Math.round((endB - startB) / MS));
+            let newStart = new Date(endA.getTime() + bufferMS); // bắt đầu sau ca trước 1 phút
             let newEnd = new Date(newStart.getTime() + duration * MS);
 
-            // Tự động điều chỉnh vào khung giờ sáng/chiều
+            // điều chỉnh theo giờ làm việc/nghỉ trưa
             if (isDuringLunch(newStart)) newStart = dayAfternoonStart(newStart);
-            if (isAfterWork(newStart)) {
-              // Nếu vượt giờ, không dời sang ngày hôm sau
-              newStart = dayAfternoonEnd(newStart); // đặt ngay cuối giờ chiều
-              // hoặc để null nếu không thể đặt
-            }
+            if (isAfterWork(newStart)) newStart = dayAfternoonEnd(newStart);
 
             newEnd = new Date(newStart.getTime() + duration * MS);
-
-            // Nếu end trùng giờ lunch, đẩy sang chiều
             if (
               newEnd > dayMorningEnd(newEnd) &&
               newEnd <= dayAfternoonStart(newEnd)
             ) {
               newEnd = dayAfternoonStart(newEnd);
             }
-
-            // Nếu vượt giờ làm việc, cắt lại
             if (isAfterWork(newEnd)) newEnd = dayAfternoonEnd(newEnd);
 
             caB[startCol] = normalizeDate(newStart);
