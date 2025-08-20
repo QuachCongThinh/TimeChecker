@@ -9,6 +9,34 @@ $primary: #3498db;
   width: 100%;
   border-collapse: collapse;
 
+  select {
+    margin-top: 6px;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background-color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    min-width: 140px;
+    appearance: none; // ẩn mũi tên mặc định
+    background: #fff
+      url("data:image/svg+xml;utf8,<svg fill='%233498db' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>")
+      no-repeat right 10px center;
+    background-size: 16px;
+    padding-right: 30px;
+
+    &:hover {
+      border-color: $primary;
+      box-shadow: 0 0 5px rgba($primary, 0.4);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: darken($primary, 5%);
+      box-shadow: 0 0 9px rgba($primary, 0.6);
+    }
+  }
   th,
   td {
     border: 1px solid #ccc;
