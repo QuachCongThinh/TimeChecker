@@ -21,7 +21,9 @@ export default function DataTable({ data, onDataChange }) {
 
   // danh sách bác sĩ duy nhất
   const doctorCol = "NGƯỜI THỰC HIỆN";
-  const doctors = [...new Set(data.map((row) => row[doctorCol]).filter(Boolean))];
+  const doctors = [
+    ...new Set(data.map((row) => row[doctorCol]).filter(Boolean)),
+  ];
 
   // dữ liệu sau khi filter
   const filteredData = doctorFilter
@@ -33,17 +35,23 @@ export default function DataTable({ data, onDataChange }) {
   };
 
   const handleCheckboxChange = (idx) => {
-    if (filteredData[idx].Trạng_thái === "Đã chỉnh (tự động) – tránh trùng") {
-      setCheckedRows((prev) => {
-        const newState = { ...prev, [idx]: true };
-        const updatedData = [...data];
-        const globalIndex = data.indexOf(filteredData[idx]); // map lại index thật trong data
-        updatedData[globalIndex].Trạng_thái = "Không chỉnh";
+    setCheckedRows((prev) => {
+      const newState = { ...prev, [idx]: !prev[idx] }; // toggle
+      const updatedData = [...data];
+      const globalIndex = data.indexOf(filteredData[idx]);
 
-        if (onDataChange) onDataChange(updatedData);
-        return newState;
-      });
-    }
+      if (newState[idx]) {
+        // Khi tick: đổi trạng thái thành "Không chỉnh"
+        updatedData[globalIndex].Trạng_thái = "Không chỉnh";
+      } else {
+        // Khi bỏ tick: khôi phục lại trạng thái ban đầu
+        updatedData[globalIndex].Trạng_thái =
+          "Đã chỉnh (tự động) – tránh trùng & giờ làm việc";
+      }
+
+      if (onDataChange) onDataChange(updatedData);
+      return newState;
+    });
   };
 
   return (
@@ -91,9 +99,14 @@ export default function DataTable({ data, onDataChange }) {
                   <input
                     type="checkbox"
                     checked={!!isChecked}
-                    onChange={() => handleCheckboxChange(idx)}
-                    disabled={row.Trạng_thái === "Không chỉnh"}
-                    onClick={(e) => e.stopPropagation()}
+                    disabled={
+                      row.Trạng_thái !==
+                      "Đã chỉnh (tự động) – tránh trùng & giờ làm việc"
+                    }
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleCheckboxChange(idx);
+                    }}
                   />
                 </td>
                 {columns.map((col, colIdx) => (
