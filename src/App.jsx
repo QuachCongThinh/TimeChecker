@@ -13,13 +13,16 @@ export default function App() {
   const [data, setData] = useState([]);
 
   const handleDataParsed = (parsed) => {
-    if (!parsed.length) return;
+    if (!parsed.length) {
+      setData([]);
+      return;
+    }
 
     const headers = Object.keys(parsed[0]);
     const { startCol, endCol } = detectDateColumns(headers);
 
     if (!startCol || !endCol) {
-      alert("Không tìm thấy cột 'Ngày thực hiện Y lệnh' hoặc 'Ngày kết quả'");
+      alert("Import bị sai kia kìa, xem lại đi");
       return;
     }
 
@@ -36,7 +39,7 @@ export default function App() {
       const newRow = { ...row };
       dateCols.forEach((col) => {
         if (newRow[col]) {
-          newRow[col] = normalizeDate(newRow[col]); 
+          newRow[col] = normalizeDate(newRow[col]);
         }
       });
       return newRow;
@@ -56,13 +59,16 @@ export default function App() {
     <div className="app">
       <h1>TOOL KIỂM TRA VÀ SỬA GIỜ XML3</h1>
       <ExcelUploader onDataParsed={handleDataParsed} />
-      {data.length > 0 && (
+
+      {data.length > 0 ? (
         <>
           <DataTable data={data} />
           <button className="export-btn" onClick={() => exportExcelFile(data)}>
             Xuất Excel
           </button>
         </>
+      ) : (
+        <p className="no-data">Chưa có dữ liệu</p>
       )}
     </div>
   );

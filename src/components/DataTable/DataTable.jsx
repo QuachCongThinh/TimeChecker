@@ -6,6 +6,7 @@ export default function DataTable({ data, onDataChange }) {
   const [selectedRow, setSelectedRow] = useState(null);
   const [checkedRows, setCheckedRows] = useState({});
   const [doctorFilter, setDoctorFilter] = useState(""); // filter bác sĩ
+  
 
   useEffect(() => {
     if (data.length) {
@@ -29,28 +30,20 @@ export default function DataTable({ data, onDataChange }) {
   const filteredData = doctorFilter
     ? data.filter((row) => row[doctorCol] === doctorFilter)
     : data;
-
-  const handleRowClick = (idx) => {
-    setSelectedRow(idx);
-  };
-
-  const handleCheckboxChange = (idx) => {
+  
+  const handleCheckboxChange = (row) => {
     setCheckedRows((prev) => {
-      const newState = { ...prev, [idx]: !prev[idx] }; // toggle
       const updatedData = [...data];
-      const globalIndex = data.indexOf(filteredData[idx]);
+      const globalIndex = row._originalIndex;
 
-      if (newState[idx]) {
-        // Khi tick: đổi trạng thái thành "Không chỉnh"
+      if (updatedData[globalIndex].Trạng_thái === "Đã chỉnh (tự động)") {
         updatedData[globalIndex].Trạng_thái = "Không chỉnh";
-      } else {
-        // Khi bỏ tick: khôi phục lại trạng thái ban đầu
-        updatedData[globalIndex].Trạng_thái =
-          "Đã chỉnh (tự động) – tránh trùng & giờ làm việc";
       }
 
       if (onDataChange) onDataChange(updatedData);
-      return newState;
+
+      // cập nhật checkedRows để render tick ngay lập tức
+      return { ...prev, [globalIndex]: true };
     });
   };
 
@@ -83,29 +76,29 @@ export default function DataTable({ data, onDataChange }) {
           </tr>
         </thead>
         <tbody>
-          {filteredData.map((row, idx) => {
-            const isSelected = selectedRow === idx;
-            const isChecked = checkedRows[idx];
+          {filteredData.map((row) => {
+            const isSelected = selectedRow === row._originalIndex;
+            const isChecked = checkedRows[row._originalIndex];
 
             return (
               <tr
-                key={idx}
+                key={row._originalIndex}
                 className={`${isSelected ? "selected-row" : ""} ${
                   isChecked ? "checked-row" : ""
                 }`}
-                onClick={() => handleRowClick(idx)}
+                onClick={() => setSelectedRow(row._originalIndex)}
               >
                 <td>
                   <input
                     type="checkbox"
-                    checked={!!isChecked}
-                    disabled={
-                      row.Trạng_thái !==
-                      "Đã chỉnh (tự động) – tránh trùng & giờ làm việc"
+                    checked={
+                      checkedRows[row._originalIndex] ||
+                      row.Trạng_thái === "Không chỉnh"
                     }
+                    disabled={row.Trạng_thái === "Không chỉnh"}
                     onChange={(e) => {
                       e.stopPropagation();
-                      handleCheckboxChange(idx);
+                      handleCheckboxChange(row);
                     }}
                   />
                 </td>

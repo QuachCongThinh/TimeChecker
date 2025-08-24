@@ -8,7 +8,23 @@ $primary: #3498db;
 .data-table {
   width: 100%;
   border-collapse: collapse;
+  input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: $primary; // hỗ trợ màu primary cho checkbox (trình duyệt mới)
 
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    &:checked {
+      transform: scale(1.2);
+      box-shadow: 0 0 6px rgba($primary, 0.6);
+    }
+
+    &:active {
+      transform: scale(0.85);
+    }
+  }
   select {
     margin-top: 6px;
     padding: 6px 10px;
