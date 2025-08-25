@@ -91,7 +91,10 @@ export default function DataTable({ data, onDataChange }) {
                   <input
                     type="checkbox"
                     checked={isChecked}
-                    disabled={row.Trạng_thái === "Hợp lệ (không trùng)"}
+                    disabled={
+                      row.Trạng_thái === "Hợp lệ (không trùng)" ||
+                      row.Trạng_thái === "Không chỉnh"
+                    }
                     onChange={(e) => {
                       e.stopPropagation();
                       handleCheckboxChange(row);
