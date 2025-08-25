@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 
 // ================== CẤU HÌNH ==================
-const WORK_START_H = 8;
+const WORK_START_H = 7;
 const LUNCH_START_H = 12;
 const LUNCH_END_H = 13;
 const WORK_END_H = 17;
@@ -23,7 +23,7 @@ const isAfterWork = (d) =>
   (d.getHours() === WORK_END_H && d.getMinutes() > 0);
 const isBeforeWork = (d) => d.getHours() < WORK_START_H;
 
-const dayMorningStart = (d) => setHM(d, WORK_START_H, 0); // 08:00
+const dayMorningStart = (d) => setHM(d, WORK_START_H, 0); // 07:00
 const dayMorningEnd = (d) => setHM(d, LUNCH_START_H, 0); // 12:00
 const dayAfternoonStart = (d) => setHM(d, LUNCH_END_H, 0); // 13:00
 const dayAfternoonEnd = (d) => setHM(d, WORK_END_H, 0); // 17:00
@@ -35,18 +35,15 @@ export const parseDate = (value) => {
 
   // Excel serial number
   if (typeof value === "number") {
-    const utcDays = Math.floor(value - 25569);
-    const utcValue = utcDays * 86400;
-    const d = new Date(utcValue * 1000);
-
-    const fractionalDay = value - Math.floor(value) + 1e-7;
-    let totalSeconds = Math.floor(86400 * fractionalDay);
-    const seconds = totalSeconds % 60;
-    totalSeconds -= seconds;
+    // 25569 là số ngày từ 1899-12-31
+    const d = new Date(Date.UTC(1899, 11, 30)); // 30 Dec 1899
+    d.setUTCDate(d.getUTCDate() + Math.floor(value));
+    const fractionalDay = value - Math.floor(value);
+    const totalSeconds = Math.round(fractionalDay * 86400);
     const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor(totalSeconds / 60) % 60;
-
-    d.setHours(hours, minutes, seconds);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    d.setUTCHours(hours, minutes, seconds);
     return d;
   }
 
@@ -56,12 +53,15 @@ export const parseDate = (value) => {
     const parts = datePart.split(/[/-]/).map(Number);
 
     let yyyy, mm, dd;
-    if (parts[2] > 1900) {
-      // mm/dd/yyyy
-      [mm, dd, yyyy] = parts;
-    } else {
+    if (parts[0] > 31) {
+      // yyyy-mm-dd
+      [yyyy, mm, dd] = parts;
+    } else if (parts[2] > 31) {
       // dd/mm/yyyy
       [dd, mm, yyyy] = parts;
+    } else {
+      // mm/dd/yyyy
+      [mm, dd, yyyy] = parts;
     }
 
     const [hh, mi = 0] = timePart.split(":").map(Number);
@@ -75,9 +75,10 @@ export const normalizeDate = (value) => {
   const d = parseDate(value);
   if (!d || isNaN(d)) return "";
   return d
-    .toLocaleString("en-US", {
-      month: "2-digit",
+    .toLocaleString("en-GB", {
+      // UK dùng dd/mm/yyyy
       day: "2-digit",
+      month: "2-digit",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
@@ -157,62 +158,73 @@ export const detectAndAdjustByDoctor = (
       const bufferMS = 1 * MS;
 
       if (startB < new Date(endA.getTime() + bufferMS)) {
-        // 📌 Có trùng ca
+        // 📌 Trùng ca
         caB.Trùng_với = `BN: ${caA["TÊN BỆNH NHÂN"] || "?"} (${
           caA[startCol]
         } - ${caA[endCol]})`;
 
         if (!manualLocked) {
-          // chỉnh tự động
           const duration = Math.max(5, Math.round((endB - startB) / MS));
           let newStart = new Date(endA.getTime() + bufferMS);
           let newEnd = new Date(newStart.getTime() + duration * MS);
 
-          // Điều chỉnh theo giờ làm việc
-          if (isDuringLunch(newStart)) newStart = dayAfternoonStart(newStart);
-          if (isAfterWork(newStart))
-            newStart = dayMorningStart(
-              new Date(newStart.setDate(newStart.getDate() + 1))
-            );
-          newEnd = new Date(newStart.getTime() + duration * MS);
+          // Đẩy sang giờ trưa/chiều nếu cần
+          if (isDuringLunch(newStart)) {
+            newStart = dayAfternoonStart(newStart);
+            newEnd = new Date(newStart.getTime() + duration * MS);
+          }
+
+          // Giới hạn max 17:00
+          if (newEnd > dayAfternoonEnd(newEnd)) {
+            newEnd = dayAfternoonEnd(newEnd);
+            if (newStart >= dayAfternoonEnd(newStart)) {
+              caB.Trạng_thái = "Không thể tự động sắp xếp (quá giờ chiều)";
+              continue;
+            }
+          }
 
           caB[startCol] = normalizeDate(newStart);
           caB[endCol] = normalizeDate(newEnd);
           caB.Trạng_thái = "Đã chỉnh (tự động)";
         } else {
-          // thủ công nhưng vẫn trùng
           caB.Trạng_thái = "Đã chỉnh (thủ công) – nhưng trùng ca";
         }
       } else {
-        // 📌 Không trùng → luôn gán rõ trạng thái
         caB.Trạng_thái = "Hợp lệ (không trùng)";
         caB.Trùng_với = "";
       }
     }
 
+    // Sắp xếp ca từ sáng → chiều
+    const sortByTimeSlot = (a, b) => {
+      const aDate = parseDate(a[startCol]);
+      const bDate = parseDate(b[startCol]);
+      const aSlot = aDate.getHours() < LUNCH_START_H ? 0 : 1;
+      const bSlot = bDate.getHours() < LUNCH_START_H ? 0 : 1;
+      if (aSlot !== bSlot) return aSlot - bSlot;
+      return aDate - bDate;
+    };
+
+    group = group.sort(sortByTimeSlot);
     updated.push(...group);
   });
 
   return updated.sort((a, b) => {
-    // Ưu tiên sắp theo mã bệnh nhân
     const idA = (a["MÃ BỆNH NHÂN"] || "").toLowerCase();
     const idB = (b["MÃ BỆNH NHÂN"] || "").toLowerCase();
     if (idA < idB) return -1;
     if (idA > idB) return 1;
 
-    // Nếu cùng mã bệnh nhân thì sắp theo tên
     const patientA = (a["TÊN BỆNH NHÂN"] || "").toLowerCase();
     const patientB = (b["TÊN BỆNH NHÂN"] || "").toLowerCase();
     if (patientA < patientB) return -1;
     if (patientA > patientB) return 1;
 
-    // Sau đó mới sắp theo bác sĩ
     const doctorA = (a[doctorCol] || "").toLowerCase();
     const doctorB = (b[doctorCol] || "").toLowerCase();
     if (doctorA < doctorB) return -1;
     if (doctorA > doctorB) return 1;
 
-    // Cuối cùng: theo thời gian y lệnh
     return parseDate(a[startCol]) - parseDate(b[startCol]);
   });
 };
