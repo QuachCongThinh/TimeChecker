@@ -6,6 +6,7 @@ export default function DataTable({ data, onDataChange }) {
   const [selectedRow, setSelectedRow] = useState(null);
   const [checkedRows, setCheckedRows] = useState({});
   const [doctorFilter, setDoctorFilter] = useState(""); // filter bác sĩ
+  const [sortConfig, setSortConfig] = useState({ column: null, order: "asc" });
 
   useEffect(() => {
     if (data.length) {
@@ -26,9 +27,20 @@ export default function DataTable({ data, onDataChange }) {
   ];
 
   // dữ liệu sau khi filter
-  const filteredData = doctorFilter
+  let filteredData = doctorFilter
     ? data.filter((row) => row[doctorCol] === doctorFilter)
     : data;
+
+  // sắp xếp dữ liệu
+  if (sortConfig.column) {
+    filteredData = [...filteredData].sort((a, b) => {
+      const valA = a[sortConfig.column] ?? "";
+      const valB = b[sortConfig.column] ?? "";
+      if (valA < valB) return sortConfig.order === "asc" ? -1 : 1;
+      if (valA > valB) return sortConfig.order === "asc" ? 1 : -1;
+      return 0;
+    });
+  }
 
   const handleCheckboxChange = (row) => {
     setCheckedRows((prev) => {
@@ -41,8 +53,18 @@ export default function DataTable({ data, onDataChange }) {
 
       if (onDataChange) onDataChange(updatedData);
 
-      // cập nhật checkedRows để render tick ngay lập tức
       return { ...prev, [globalIndex]: true };
+    });
+  };
+
+  const handleSort = (col) => {
+    setSortConfig((prev) => {
+      if (prev.column === col) {
+        // nếu click lại cùng cột thì đảo chiều asc <-> desc
+        return { column: col, order: prev.order === "asc" ? "desc" : "asc" };
+      }
+      // nếu chọn cột mới thì mặc định asc
+      return { column: col, order: "asc" };
     });
   };
 
@@ -53,13 +75,20 @@ export default function DataTable({ data, onDataChange }) {
           <tr>
             <th></th>
             {columns.map((col) => (
-              <th key={col}>
+              <th
+                key={col}
+                onClick={() => handleSort(col)}
+                style={{ cursor: "pointer" }}
+              >
                 {col}
+                {sortConfig.column === col &&
+                  (sortConfig.order === "asc" ? " ▲" : " ▼")}
                 {col === doctorCol && (
                   <div>
                     <select
                       value={doctorFilter}
                       onChange={(e) => setDoctorFilter(e.target.value)}
+                      onClick={(e) => e.stopPropagation()} // tránh trigger sort khi chọn filter
                     >
                       <option value="">-- Tất cả --</option>
                       {doctors.map((doc) => (
@@ -91,10 +120,7 @@ export default function DataTable({ data, onDataChange }) {
                   <input
                     type="checkbox"
                     checked={isChecked}
-                    disabled={
-                      row.Trạng_thái === "Hợp lệ (không trùng)" ||
-                      row.Trạng_thái === "Không chỉnh"
-                    }
+                    disabled={row.Trạng_thái === "✅ Hợp lệ"}
                     onChange={(e) => {
                       e.stopPropagation();
                       handleCheckboxChange(row);

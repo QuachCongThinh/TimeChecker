@@ -127,13 +127,16 @@ export const detectAndAdjustByDoctor = (
   endCol,
   doctorCol
 ) => {
+  const MIN_DIFF_MS = 5 * 60 * 1000; // tối thiểu 5 phút
+  const MAX_DIFF_MS = 1 * 60 * 60 * 1000; // tối đa 1 giờ
+
   const grouped = records.reduce((acc, rec, idx) => {
     const doctor = rec[doctorCol] || "Không rõ";
     if (!acc[doctor]) acc[doctor] = [];
     acc[doctor].push({
       ...rec,
-      Trạng_thái: rec.Trạng_thái || "Không chỉnh",
-      Trùng_với: "",
+      Trạng_thái: rec.Trạng_thái || "Chưa kiểm tra",
+      Trùng_với: new Set(),
       _originalIndex: idx,
     });
     return acc;
@@ -146,85 +149,61 @@ export const detectAndAdjustByDoctor = (
       (a, b) => parseDate(a[startCol]) - parseDate(b[startCol])
     );
 
-    for (let i = 0; i < group.length - 1; i++) {
+    // --- Bước 1: Phát hiện overlap theo giờ gốc ---
+    for (let i = 0; i < group.length; i++) {
       const caA = group[i];
-      const caB = group[i + 1];
-
+      const nameA = caA["TÊN BỆNH NHÂN"] || "";
+      const startA = parseDate(caA[startCol]);
       const endA = parseDate(caA[endCol]);
-      let startB = parseDate(caB[startCol]);
-      let endB = parseDate(caB[endCol]);
-      const manualLocked = caB.Trạng_thái.includes("thủ công");
+      if (!startA || !endA) continue;
 
-      const bufferMS = 1 * MS;
+      for (let j = i + 1; j < group.length; j++) {
+        const caB = group[j];
+        const nameB = caB["TÊN BỆNH NHÂN"] || "";
+        const startB = parseDate(caB[startCol]);
+        const endB = parseDate(caB[endCol]);
+        if (!startB || !endB) continue;
 
-      if (startB < new Date(endA.getTime() + bufferMS)) {
-        // 📌 Trùng ca
-        caB.Trùng_với = `BN: ${caA["TÊN BỆNH NHÂN"] || "?"} (${
-          caA[startCol]
-        } - ${caA[endCol]})`;
+        if (startA < endB && endA > startB) {
+          // ✅ Ghi nhận trùng giờ gốc
+          if (nameB) caA.Trùng_với.add(nameB);
+          if (nameA) caB.Trùng_với.add(nameA);
 
-        if (!manualLocked) {
-          const duration = Math.max(5, Math.round((endB - startB) / MS));
-          let newStart = new Date(endA.getTime() + bufferMS);
-          let newEnd = new Date(newStart.getTime() + duration * MS);
-
-          // Đẩy sang giờ trưa/chiều nếu cần
-          if (isDuringLunch(newStart)) {
-            newStart = dayAfternoonStart(newStart);
-            newEnd = new Date(newStart.getTime() + duration * MS);
-          }
-
-          // Giới hạn max 17:00
-          if (newEnd > dayAfternoonEnd(newEnd)) {
-            newEnd = dayAfternoonEnd(newEnd);
-            if (newStart >= dayAfternoonEnd(newStart)) {
-              caB.Trạng_thái = "Không thể tự động sắp xếp (quá giờ chiều)";
-              continue;
-            }
-          }
-
-          caB[startCol] = normalizeDate(newStart);
-          caB[endCol] = normalizeDate(newEnd);
-          caB.Trạng_thái = "Đã chỉnh (tự động)";
-        } else {
-          caB.Trạng_thái = "Đã chỉnh (thủ công) – nhưng trùng ca";
+          caA.Trạng_thái = "⚠️ Ca bị trùng giờ với ca khác";
+          caB.Trạng_thái = "⚠️ Ca bị trùng giờ với ca khác";
         }
-      } else {
-        caB.Trạng_thái = "Hợp lệ (không trùng)";
-        caB.Trùng_với = "";
       }
     }
 
-    // Sắp xếp ca từ sáng → chiều
-    const sortByTimeSlot = (a, b) => {
-      const aDate = parseDate(a[startCol]);
-      const bDate = parseDate(b[startCol]);
-      const aSlot = aDate.getHours() < LUNCH_START_H ? 0 : 1;
-      const bSlot = bDate.getHours() < LUNCH_START_H ? 0 : 1;
-      if (aSlot !== bSlot) return aSlot - bSlot;
-      return aDate - bDate;
-    };
+    // --- Bước 2: Điều chỉnh giờ (nếu muốn), nhưng KHÔNG thay đổi Trùng_với ---
+    for (let i = 0; i < group.length; i++) {
+      const ca = group[i];
+      const start = parseDate(ca[startCol]);
+      const end = parseDate(ca[endCol]);
+      if (!start || !end) continue;
 
-    group = group.sort(sortByTimeSlot);
-    updated.push(...group);
+      const diff = end - start;
+      if (diff < MIN_DIFF_MS) {
+        ca.Trạng_thái = "❌ Lỗi: Khoảng cách < 5 phút";
+      } else if (diff > MAX_DIFF_MS) {
+        ca.Trạng_thái = "⚠️ Cảnh báo: Khoảng cách quá dài";
+      } else if (!ca.Trạng_thái.startsWith("⚠️") && !ca.Trạng_thái.startsWith("❌")) {
+        ca.Trạng_thái = "✅ Hợp lệ";
+      }
+    }
+
+    // Convert Set → chuỗi và loại bỏ self
+    updated.push(
+      ...group.map((ca) => {
+        const self = ca["TÊN BỆNH NHÂN"] || "";
+        ca.Trùng_với.delete(self);
+        return {
+          ...ca,
+          Trùng_với: Array.from(ca.Trùng_với).join(", "),
+        };
+      })
+    );
   });
 
-  return updated.sort((a, b) => {
-    const idA = (a["MÃ BỆNH NHÂN"] || "").toLowerCase();
-    const idB = (b["MÃ BỆNH NHÂN"] || "").toLowerCase();
-    if (idA < idB) return -1;
-    if (idA > idB) return 1;
-
-    const patientA = (a["TÊN BỆNH NHÂN"] || "").toLowerCase();
-    const patientB = (b["TÊN BỆNH NHÂN"] || "").toLowerCase();
-    if (patientA < patientB) return -1;
-    if (patientA > patientB) return 1;
-
-    const doctorA = (a[doctorCol] || "").toLowerCase();
-    const doctorB = (b[doctorCol] || "").toLowerCase();
-    if (doctorA < doctorB) return -1;
-    if (doctorA > doctorB) return 1;
-
-    return parseDate(a[startCol]) - parseDate(b[startCol]);
-  });
+  return updated.sort((a, b) => parseDate(a[startCol]) - parseDate(b[startCol]));
 };
