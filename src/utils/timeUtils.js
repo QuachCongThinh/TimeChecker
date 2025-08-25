@@ -158,6 +158,10 @@ export const detectAndAdjustByDoctor = (
 
       if (startB < new Date(endA.getTime() + bufferMS)) {
         // 📌 Có trùng ca
+        caB.Trùng_với = `BN: ${caA["TÊN BỆNH NHÂN"] || "?"} (${
+          caA[startCol]
+        } - ${caA[endCol]})`;
+
         if (!manualLocked) {
           // chỉnh tự động
           const duration = Math.max(5, Math.round((endB - startB) / MS));
@@ -175,21 +179,14 @@ export const detectAndAdjustByDoctor = (
           caB[startCol] = normalizeDate(newStart);
           caB[endCol] = normalizeDate(newEnd);
           caB.Trạng_thái = "Đã chỉnh (tự động)";
-          caB.Trùng_với = `BN: ${caA["TÊN BỆNH NHÂN"] || "?"} (${
-            caA[startCol]
-          } - ${caA[endCol]})`;
         } else {
           // thủ công nhưng vẫn trùng
           caB.Trạng_thái = "Đã chỉnh (thủ công) – nhưng trùng ca";
-          caB.Trùng_với = `BN: ${caA["TÊN BỆNH NHÂN"] || "?"} (${
-            caA[startCol]
-          } - ${caA[endCol]})`;
         }
       } else {
-        // 📌 Không trùng → nếu vẫn "Không chỉnh" thì gán rõ ràng
-        if (caB.Trạng_thái === "Không chỉnh") {
-          caB.Trạng_thái = "Hợp lệ (không trùng)";
-        }
+        // 📌 Không trùng → luôn gán rõ trạng thái
+        caB.Trạng_thái = "Hợp lệ (không trùng)";
+        caB.Trùng_với = "";
       }
     }
 
