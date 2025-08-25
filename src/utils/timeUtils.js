@@ -157,12 +157,14 @@ export const detectAndAdjustByDoctor = (
       const bufferMS = 1 * MS;
 
       if (startB < new Date(endA.getTime() + bufferMS)) {
+        // 📌 Có trùng ca
         if (!manualLocked) {
+          // chỉnh tự động
           const duration = Math.max(5, Math.round((endB - startB) / MS));
           let newStart = new Date(endA.getTime() + bufferMS);
           let newEnd = new Date(newStart.getTime() + duration * MS);
 
-          // Điều chỉnh giờ làm việc
+          // Điều chỉnh theo giờ làm việc
           if (isDuringLunch(newStart)) newStart = dayAfternoonStart(newStart);
           if (isAfterWork(newStart))
             newStart = dayMorningStart(
@@ -177,10 +179,16 @@ export const detectAndAdjustByDoctor = (
             caA[startCol]
           } - ${caA[endCol]})`;
         } else {
+          // thủ công nhưng vẫn trùng
           caB.Trạng_thái = "Đã chỉnh (thủ công) – nhưng trùng ca";
           caB.Trùng_với = `BN: ${caA["TÊN BỆNH NHÂN"] || "?"} (${
             caA[startCol]
           } - ${caA[endCol]})`;
+        }
+      } else {
+        // 📌 Không trùng → nếu vẫn "Không chỉnh" thì gán rõ ràng
+        if (caB.Trạng_thái === "Không chỉnh") {
+          caB.Trạng_thái = "Hợp lệ (không trùng)";
         }
       }
     }

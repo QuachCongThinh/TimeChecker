@@ -6,7 +6,6 @@ export default function DataTable({ data, onDataChange }) {
   const [selectedRow, setSelectedRow] = useState(null);
   const [checkedRows, setCheckedRows] = useState({});
   const [doctorFilter, setDoctorFilter] = useState(""); // filter bác sĩ
-  
 
   useEffect(() => {
     if (data.length) {
@@ -30,7 +29,7 @@ export default function DataTable({ data, onDataChange }) {
   const filteredData = doctorFilter
     ? data.filter((row) => row[doctorCol] === doctorFilter)
     : data;
-  
+
   const handleCheckboxChange = (row) => {
     setCheckedRows((prev) => {
       const updatedData = [...data];
@@ -78,7 +77,7 @@ export default function DataTable({ data, onDataChange }) {
         <tbody>
           {filteredData.map((row) => {
             const isSelected = selectedRow === row._originalIndex;
-            const isChecked = checkedRows[row._originalIndex];
+            const isChecked = !!checkedRows[row._originalIndex];
 
             return (
               <tr
@@ -91,11 +90,8 @@ export default function DataTable({ data, onDataChange }) {
                 <td>
                   <input
                     type="checkbox"
-                    checked={
-                      checkedRows[row._originalIndex] ||
-                      row.Trạng_thái === "Không chỉnh"
-                    }
-                    disabled={row.Trạng_thái === "Không chỉnh"}
+                    checked={isChecked}
+                    disabled={row.Trạng_thái === "Hợp lệ (không trùng)"}
                     onChange={(e) => {
                       e.stopPropagation();
                       handleCheckboxChange(row);
