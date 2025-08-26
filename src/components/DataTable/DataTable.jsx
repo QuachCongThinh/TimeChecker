@@ -73,7 +73,8 @@ export default function DataTable({ data, onDataChange }) {
       <table className="data-table">
         <thead>
           <tr>
-            <th></th>
+            <th></th> {/* checkbox */}
+            <th>STT</th> {/* cột số thứ tự */}
             {columns.map((col) => (
               <th
                 key={col}
@@ -88,7 +89,7 @@ export default function DataTable({ data, onDataChange }) {
                     <select
                       value={doctorFilter}
                       onChange={(e) => setDoctorFilter(e.target.value)}
-                      onClick={(e) => e.stopPropagation()} // tránh trigger sort khi chọn filter
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <option value="">-- Tất cả --</option>
                       {doctors.map((doc) => (
@@ -103,8 +104,9 @@ export default function DataTable({ data, onDataChange }) {
             ))}
           </tr>
         </thead>
+
         <tbody>
-          {filteredData.map((row) => {
+          {filteredData.map((row, index) => {
             const isSelected = selectedRow === row._originalIndex;
             const isChecked = !!checkedRows[row._originalIndex];
 
@@ -127,6 +129,7 @@ export default function DataTable({ data, onDataChange }) {
                     }}
                   />
                 </td>
+                <td>{index + 1}</td> {/* cột STT */}
                 {columns.map((col, colIdx) => (
                   <td key={colIdx}>{row[col]}</td>
                 ))}

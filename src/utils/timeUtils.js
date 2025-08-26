@@ -1,5 +1,4 @@
 /* eslint-disable no-unused-vars */
-
 // ================== CẤU HÌNH ==================
 const WORK_START_H = 7;
 const LUNCH_START_H = 12;
@@ -120,15 +119,15 @@ export const detectDateColumns = (headers) => {
   return { startCol, endCol };
 };
 
-// ================== SẮP XẾP THEO BÁC SĨ ==================
+// ================== SẮP XẾP GIỜ ==================
 export const detectAndAdjustByDoctor = (
   records,
   startCol,
   endCol,
   doctorCol
 ) => {
-  const MIN_DIFF_MS = 5 * 60 * 1000; // tối thiểu 5 phút
-  const MAX_DIFF_MS = 1 * 60 * 60 * 1000; // tối đa 1 giờ
+  const MIN_DIFF_MS = 1 * 60 * 1000; // 1 phút
+  const STANDARD_INTERVAL_MS = 5 * 60 * 1000; // 5 phút
 
   const grouped = records.reduce((acc, rec, idx) => {
     const doctor = rec[doctorCol] || "Không rõ";
@@ -149,61 +148,97 @@ export const detectAndAdjustByDoctor = (
       (a, b) => parseDate(a[startCol]) - parseDate(b[startCol])
     );
 
-    // --- Bước 1: Phát hiện overlap theo giờ gốc ---
-    for (let i = 0; i < group.length; i++) {
-      const caA = group[i];
-      const nameA = caA["TÊN BỆNH NHÂN"] || "";
-      const startA = parseDate(caA[startCol]);
-      const endA = parseDate(caA[endCol]);
-      if (!startA || !endA) continue;
+    let prevEnd = null; // lưu Ngày Kết quả ca trước
 
-      for (let j = i + 1; j < group.length; j++) {
-        const caB = group[j];
-        const nameB = caB["TÊN BỆNH NHÂN"] || "";
-        const startB = parseDate(caB[startCol]);
-        const endB = parseDate(caB[endCol]);
-        if (!startB || !endB) continue;
-
-        if (startA < endB && endA > startB) {
-          // ✅ Ghi nhận trùng giờ gốc
-          if (nameB) caA.Trùng_với.add(nameB);
-          if (nameA) caB.Trùng_với.add(nameA);
-
-          caA.Trạng_thái = "⚠️ Ca bị trùng giờ với ca khác";
-          caB.Trạng_thái = "⚠️ Ca bị trùng giờ với ca khác";
-        }
-      }
-    }
-
-    // --- Bước 2: Điều chỉnh giờ (nếu muốn), nhưng KHÔNG thay đổi Trùng_với ---
     for (let i = 0; i < group.length; i++) {
       const ca = group[i];
-      const start = parseDate(ca[startCol]);
-      const end = parseDate(ca[endCol]);
-      if (!start || !end) continue;
+      const yLenh = parseDate(ca["NGÀY Y LỆNH"]);
+      let thYLenh = parseDate(ca[startCol]);
+      let ketQua = parseDate(ca[endCol]);
 
-      const diff = end - start;
-      if (diff < MIN_DIFF_MS) {
-        ca.Trạng_thái = "❌ Lỗi: Khoảng cách < 5 phút";
-      } else if (diff > MAX_DIFF_MS) {
-        ca.Trạng_thái = "⚠️ Cảnh báo: Khoảng cách quá dài";
-      } else if (!ca.Trạng_thái.startsWith("⚠️") && !ca.Trạng_thái.startsWith("❌")) {
-        ca.Trạng_thái = "✅ Hợp lệ";
+      // Nếu ca không hợp lệ (trùng), cần điều chỉnh
+      let needAdjust = false;
+      if (prevEnd && thYLenh < new Date(prevEnd.getTime() + MIN_DIFF_MS))
+        needAdjust = true;
+
+      // Kiểm tra trùng với các ca trước và sau
+      for (let j = 0; j < i; j++) {
+        const other = group[j];
+        const oStart = parseDate(other[startCol]);
+        const oEnd = parseDate(other[endCol]);
+        if (thYLenh < oEnd && ketQua > oStart) {
+          needAdjust = true;
+          ca.Trùng_với.add(other["TÊN BỆNH NHÂN"] || "");
+          other.Trùng_với.add(ca["TÊN BỆNH NHÂN"] || "");
+        }
       }
+
+      if (!needAdjust) {
+        // Nếu có trùng với ca khác thì cảnh báo
+        if (ca.Trùng_với.size > 0) {
+          ca.Trạng_thái = "⚠️ Ca bị trùng giờ";
+        } else {
+          ca.Trạng_thái = "✅ Hợp lệ";
+        }
+        prevEnd = ketQua;
+        continue; // giữ nguyên ca hợp lệ
+      }
+
+      // --- Bắt đầu điều chỉnh ---
+      thYLenh = new Date(yLenh.getTime() + STANDARD_INTERVAL_MS);
+      ketQua = new Date(thYLenh.getTime() + STANDARD_INTERVAL_MS);
+
+      // 1. Tránh trùng với ca trước
+      if (prevEnd && thYLenh < new Date(prevEnd.getTime() + MIN_DIFF_MS)) {
+        const shift = prevEnd.getTime() + MIN_DIFF_MS - thYLenh.getTime();
+        thYLenh = new Date(thYLenh.getTime() + shift);
+        ketQua = new Date(thYLenh.getTime() + STANDARD_INTERVAL_MS);
+      }
+
+      // 2. Tránh giờ trưa
+      if (isDuringLunch(thYLenh)) {
+        thYLenh = dayAfternoonStart(thYLenh);
+        ketQua = new Date(thYLenh.getTime() + STANDARD_INTERVAL_MS);
+      }
+
+      // 3. Không vượt giờ làm việc
+      if (ketQua > dayAfternoonEnd(ketQua)) {
+        ca.Trạng_thái = "❌ Vượt giờ làm việc";
+      } else {
+        ca.Trạng_thái = "⚠️ Ca bị trùng giờ";
+      }
+
+      // 4. Gán giá trị chuẩn
+      ca[startCol] = normalizeDate(thYLenh);
+      ca[endCol] = normalizeDate(ketQua);
+      ca["NGÀY Y LỆNH"] = normalizeDate(yLenh);
+
+      prevEnd = ketQua;
     }
 
-    // Convert Set → chuỗi và loại bỏ self
+    // 5. Chuyển Trùng_với thành string
     updated.push(
       ...group.map((ca) => {
         const self = ca["TÊN BỆNH NHÂN"] || "";
         ca.Trùng_với.delete(self);
-        return {
-          ...ca,
-          Trùng_với: Array.from(ca.Trùng_với).join(", "),
-        };
+        ca.Trùng_với = Array.from(ca.Trùng_với).join(", ");
+
+        // --- Cập nhật trạng thái theo yêu cầu ---
+        if (ca.Trạng_thái === "❌ Vượt giờ làm việc") {
+          // Giữ nguyên cảnh báo vượt giờ
+        } else if (ca.Trùng_với) {
+          ca.Trạng_thái = "⚠️ Ca bị trùng giờ";
+        } else {
+          ca.Trạng_thái = "✅ Hợp lệ";
+        }
+
+        return ca;
       })
     );
   });
 
-  return updated.sort((a, b) => parseDate(a[startCol]) - parseDate(b[startCol]));
+  // 6. Sắp xếp lại theo giờ TH Y lệnh
+  return updated.sort(
+    (a, b) => parseDate(a[startCol]) - parseDate(b[startCol])
+  );
 };
